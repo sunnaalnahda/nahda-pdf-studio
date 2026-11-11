@@ -20,6 +20,11 @@ class DartPdfEngine implements PdfEditingEngine {
     }
     final controller = PdfEditingController(data);
     try {
+      // Preferences are restored asynchronously from the user's previous
+      // sessions. Wait before clearing a previously persisted embedded Amiri:
+      // otherwise that old choice can return right after document open.
+      await controller.preferences.ready;
+      controller.activeFont = null;
       // Do not globally select the embedded Amiri font for newly-authored text.
       // dart_pdf_editor 15.0.0 reorders PdfEmbeddedFont RTL glyphs into a
       // visual stream and can produce reversed Arabic in the editor. Its

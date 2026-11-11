@@ -21,6 +21,7 @@ void main() {
     try {
       expect(session.pageCount, 2);
       expect(session.isModified, false);
+      expect(session.controller.activeFont, isNull);
       const arabic = 'السَّلَامُ عليكم ورحمة الله - تجربة ١٢٣ ABC 456';
       session.addArabicText(
         text: arabic,
