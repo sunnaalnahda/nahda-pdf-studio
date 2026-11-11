@@ -147,8 +147,8 @@ class _WorkspacePageState extends State<WorkspacePage> {
                 ]),
                 const SizedBox(height: 12),
                 Text(
-                  t('يُضاف النص كعنصر PDF متجه وقابل للتحريك، مع إبقاء محتوى الصفحة الأصلي.',
-                    'Text is added as an editable vector PDF annotation without rasterizing the page.'),
+                  t('يُضاف النص كتعليق PDF قابل للتحرير دون تحويل الصفحة إلى صورة. يستخدم مسار Unicode مؤقتًا لتجنب عكس العربية، ولا يضمن تضمين خط Amiri أو تطابق المظهر في جميع برامج PDF. تحقق من النسخة المحفوظة في وضع PDFium.',
+                    'Creates an editable PDF annotation without rasterization. The temporary Unicode path avoids reversed Arabic but does not guarantee embedded Amiri or identical appearance across PDF readers. Check the saved copy in PDFium.'),
                   style: Theme.of(ctx).textTheme.bodySmall,
                 ),
               ],

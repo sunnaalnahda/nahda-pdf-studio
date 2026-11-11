@@ -20,14 +20,11 @@ class DartPdfEngine implements PdfEditingEngine {
     }
     final controller = PdfEditingController(data);
     try {
-      final fontData = await rootBundle.load('assets/fonts/Amiri-Regular.ttf');
-      final fontBytes = fontData.buffer.asUint8List(
-        fontData.offsetInBytes,
-        fontData.lengthInBytes,
-      );
-      if (!controller.setCustomFont(fontBytes)) {
-        throw const FormatException('تعذر تهيئة الخط العربي المدمج.');
-      }
+      // Do not globally select the embedded Amiri font for newly-authored text.
+      // dart_pdf_editor 15.0.0 reorders PdfEmbeddedFont RTL glyphs into a
+      // visual stream and can produce reversed Arabic in the editor. Its
+      // Unicode-font fallback retains logical Unicode for the text engine.
+      // Embedded, fully shaped Arabic is NOT solved yet; see docs/QA_AND_LIMITATIONS.md.
       return DartPdfSession(
         filename: filename,
         original: Uint8List.fromList(data),
@@ -88,6 +85,11 @@ class DartPdfSession implements PdfEditingSession {
     if (pageIndex < 0 || pageIndex >= pageCount) {
       throw RangeError.range(pageIndex + 1, 1, pageCount, 'رقم الصفحة');
     }
+    // The editor's embedded-font path currently reverses/does not shape Arabic
+    // reliably. Route our Arabic button through its logical-Unicode fallback.
+    // This avoids silent reversed glyph order but DOES NOT embed Amiri.
+    // Keep the user's actual string untouched, including diacritics and numbers.
+    controller.activeFont = null;
     controller.preferences.fontSize = fontSize.clamp(8.0, 72.0).toDouble();
     controller.color = const Color(0xFF11243A);
     // placeFreeText clamps the box to the crop box for unusual page sizes.

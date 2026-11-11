@@ -83,6 +83,10 @@ git pull --ff-only origin main
 
 إذا ظهر الخطأ `atlstr.h` ففعّل `C++ ATL for latest v142 build tools (x86 & x64)` في Visual Studio 2019 Installer أو ما يعادله للإصدار المختار. وصول `flutter doctor` إلى `No issues found` لا يتحقق وحده من ATL. راجع [دليل Windows](docs/WINDOWS.md).
 
+## تنبيه تجريبي — حروف العربية في FreeText
+
+في Windows اكتُشف أن اختيار Amiri المضمّن افتراضيًا لدى `dart_pdf_editor 15.0.0` قد يعكس ترتيب الحروف العربية. ألغينا اختياره التلقائي، وتستخدم أداة إضافة النص العربي مسار Unicode مع حفظ النص المنطقي بدون عكس يدوي. **هذه معالجة مؤقتة لا تضمن تضمين Amiri أو التشكيل الصحيح عند فتح PDF في كل قارئ.** اختبر PDF بعد الحفظ في وضع PDFium وبرنامج مستقل قبل استخدامه مع العملاء؛ تفاصيل المعالجة في [معايير الجودة](docs/QA_AND_LIMITATIONS.md).
+
 ## تجربة إدراج النص العربي
 
 1. شغّل التطبيق وافتح `tests/fixtures/vector_original.pdf`، وهو ملف متجه من صفحتين.
