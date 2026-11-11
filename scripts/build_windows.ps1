@@ -44,6 +44,16 @@ if (-not (Test-Path -LiteralPath 'windows\CMakeLists.txt')) {
   if ($LASTEXITCODE -ne 0) { throw 'flutter create for Windows failed' }
 }
 
+# Remove only Flutter's unmodified counter template; never remove custom tests.
+$templateTest = Join-Path (Get-Location) 'test\widget_test.dart'
+if (Test-Path -LiteralPath $templateTest) {
+  $source = Get-Content -LiteralPath $templateTest -Raw
+  if ($source.Contains('Counter increments smoke test') -and $source.Contains('MyApp')) {
+    Remove-Item -LiteralPath $templateTest -Force
+    Write-Host 'Removed obsolete Flutter counter test.' -ForegroundColor Yellow
+  }
+}
+
 flutter pub get
 if ($LASTEXITCODE -ne 0) { throw 'flutter pub get failed' }
 flutter analyze

@@ -38,16 +38,9 @@ jobs:
           Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/google/fonts/main/ofl/amiri/Amiri-Regular.ttf' -OutFile assets/fonts/Amiri-Regular.ttf
           Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/google/fonts/main/ofl/amiri/OFL.txt' -OutFile assets/fonts/Amiri-OFL.txt
           if ((Get-Item assets/fonts/Amiri-Regular.ttf).Length -lt 100000) { throw 'Incomplete Arabic font' }
-      - name: Generate Windows platform runner
-        run: flutter create --platforms=windows --project-name nahda_pdf_studio --org com.nahda.pdfstudio .
-      - name: Resolve dependencies
-        run: flutter pub get
-      - name: Static analysis
-        run: flutter analyze
-      - name: Verify Arabic PDF incremental save (native)
-        run: flutter test test/arabic_annotation_integration_test.dart --reporter expanded
-      - name: Build Windows release
-        run: flutter build windows --release
+      - name: Generate, analyze, test and build Windows
+        shell: pwsh
+        run: .\scripts\build_windows.ps1 -RunNativeTest -Release
       - uses: actions/upload-artifact@v4
         with:
           name: nahda-pdf-studio-windows-x64
