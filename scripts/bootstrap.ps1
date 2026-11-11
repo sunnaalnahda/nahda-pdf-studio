@@ -26,6 +26,18 @@ if (-not $SkipFlutterCreate) {
   flutter create --platforms=android,web --project-name nahda_pdf_studio --org com.nahda.pdfstudio .
   if ($LASTEXITCODE -ne 0) { throw 'flutter create failed' }
 }
+
+# Flutter's default counter test calls MyApp, while this project uses NahdaPdfStudio.
+# Remove only the untouched Flutter template test, never a custom test.
+$templateTest = Join-Path (Get-Location) 'test\\widget_test.dart'
+if (Test-Path -LiteralPath $templateTest) {
+  $templateText = Get-Content -LiteralPath $templateTest -Raw
+  if ($templateText.Contains('Counter increments smoke test') -and $templateText.Contains('MyApp')) {
+    Remove-Item -LiteralPath $templateTest -Force
+    Write-Host 'Removed obsolete Flutter-generated counter test.' -ForegroundColor Yellow
+  }
+}
+
 flutter pub get
 if ($LASTEXITCODE -ne 0) { throw 'flutter pub get failed' }
 flutter analyze

@@ -29,6 +29,11 @@ jobs:
           test "$(wc -c < assets/fonts/Amiri-Regular.ttf)" -gt 100000
           curl -fL --retry 3 'https://raw.githubusercontent.com/google/fonts/main/ofl/amiri/OFL.txt' -o assets/fonts/Amiri-OFL.txt
       - run: flutter create --platforms=android,web --project-name nahda_pdf_studio --org com.nahda.pdfstudio .
+      - name: Remove obsolete Flutter template counter test
+        run: |
+          if [ -f test/widget_test.dart ] && grep -q 'Counter increments smoke test' test/widget_test.dart && grep -q 'MyApp' test/widget_test.dart; then
+            rm test/widget_test.dart
+          fi
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
