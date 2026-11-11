@@ -1,0 +1,3 @@
+-r requirements.txt
+# Optional additional qpdf-backed parser. Not needed by the Android/web runtime.
+pikepdf>=10,<12
