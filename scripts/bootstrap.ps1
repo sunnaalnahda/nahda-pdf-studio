@@ -1,4 +1,4 @@
-param([switch]$SkipFlutterCreate)
+param([switch]$SkipFlutterCreate, [switch]$RunNativePdfTests)
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path -Parent $PSScriptRoot)
 
@@ -42,8 +42,27 @@ flutter pub get
 if ($LASTEXITCODE -ne 0) { throw 'flutter pub get failed' }
 flutter analyze
 if ($LASTEXITCODE -ne 0) { throw 'flutter analyze failed' }
-flutter test
-if ($LASTEXITCODE -ne 0) { throw 'flutter test failed' }
-Write-Host 'Flutter scaffold, dependencies and static checks finished.' -ForegroundColor Green
+
+# Browser tests target the Web runtime and do not require a Windows C/C++ compiler.
+# Never use plain 'flutter test' as a default on Windows: pdfium_dart's
+# native asset hook requires an MSVC C/C++ toolchain for host-side tests.
+Write-Host 'Running Flutter browser smoke tests (Chrome)...' -ForegroundColor Cyan
+flutter test -d chrome test/workspace_smoke_test.dart test/pdf_engine_interface_test.dart
+if ($LASTEXITCODE -ne 0) {
+  throw 'Chrome tests failed. Check Chrome is installed. Native compiler is NOT needed for browser tests.'
+}
+
+Write-Host 'Building Flutter Web release...' -ForegroundColor Cyan
+flutter build web --release
+if ($LASTEXITCODE -ne 0) { throw 'flutter build web failed' }
+
+# Explicitly opt in to native PDF tests on a machine with a C/C++ toolchain.
+if ($RunNativePdfTests) {
+  Write-Host 'Running native PDF integration test. On Windows this requires MSVC and Windows SDK.' -ForegroundColor Cyan
+  flutter test test/arabic_annotation_integration_test.dart
+  if ($LASTEXITCODE -ne 0) { throw 'Native PDF test failed: check host compiler / native PDF engine.' }
+}
+Write-Host 'Analysis, browser tests, and Web release build passed.' -ForegroundColor Green
 Write-Host 'Web: flutter run -d chrome'
 Write-Host 'APK: flutter build apk --release'
+Write-Host 'Native PDF test (optional; needs compiler): .\\scripts\\bootstrap.ps1 -SkipFlutterCreate -RunNativePdfTests'

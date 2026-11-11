@@ -36,5 +36,9 @@ jobs:
           fi
       - run: flutter pub get
       - run: flutter analyze
-      - run: flutter test
-      - run: flutter build web --release
+      - name: Run Web browser smoke and editor-contract tests
+        run: flutter test -d chrome test/workspace_smoke_test.dart test/pdf_engine_interface_test.dart
+      - name: Build release Web app
+        run: flutter build web --release
+      - name: Run native PDF Arabic annotation integration (Linux C toolchain)
+        run: timeout -s TERM 120s flutter test test/arabic_annotation_integration_test.dart

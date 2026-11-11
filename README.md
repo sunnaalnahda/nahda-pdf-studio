@@ -32,7 +32,15 @@ flutter --version
 .\scripts\bootstrap.ps1
 ```
 
-يقوم السكربت **تلقائيًا** بتنزيل خط Amiri المرخّص SIL OFL ونص الترخيص على جهازك، وإنشاء مجلدات Flutter الرسمية للويب وأندرويد (غير المضمنة في الحزمة)، وتثبيت الحزم، وتشغيل `flutter analyze` و`flutter test`. لا نوزع الخط ضمن الحزمة.
+يقوم السكربت **تلقائيًا** بتنزيل خط Amiri المرخّص SIL OFL ونص الترخيص على جهازك، وإنشاء مجلدات Flutter الرسمية للويب وأندرويد (غير المضمنة في الحزمة)، وتثبيت الحزم، وتشغيل `flutter analyze` واختبارات المتصفح باستخدام Chrome، وبناء نسخة Web. لا يشغّل السكربت اختبارات PDF الأصلية على Windows افتراضيًا، لأن `pdfium_dart` يحتاج MSVC وWindows SDK لهذه الاختبارات على مضيف Windows، بينما لا نحتاج بناء تطبيق Windows في المرحلة الأولى.
+
+لاختبار محرك PDF الأصلي على جهاز Windows **اختياريًا** بعد تثبيت أدوات MSVC المجانية:
+
+```powershell
+.\scripts\bootstrap.ps1 -SkipFlutterCreate -RunNativePdfTests
+```
+
+يجري GitHub Actions أيضًا اختبار إدراج النص العربي في بيئة Linux المزودة بمترجم C/C++. عند فشل الاختبار الأصلي لا نعتبر جودة الإدراج معتمدة. لا نوزع الخط ضمن الحزمة.
 
 تشغيل الويب:
 
@@ -113,6 +121,6 @@ nahda-pdf-studio/
 
 ### بوابات الانتقال إلى المرحلة الثانية
 
-لا نعتمد المرحلة الأولى صالحة للاستخدام اليومي إلا بعد نجاح: `flutter analyze`، و`flutter test` بما فيه اختبار إدراج النص، و`flutter build web --release`، و`flutter build apk --release`، وفتح عينة PDF على Chrome وجهاز Android فعلي، وحفظها وإعادة فتحها، وفحص اختلاف الشكل العربي بصريًا عبر PDFium ومحرر Dart، ومقارنة نسخة `-edited.pdf` بـPython.
+لا نعتمد المرحلة الأولى صالحة للاستخدام اليومي إلا بعد نجاح: `flutter analyze`، واختبارات Chrome، واختبار إدراج النص الأصلي في Linux أو Android، و`flutter build web --release`، و`flutter build apk --release`، وفتح عينة PDF على Chrome وجهاز Android فعلي، وحفظها وإعادة فتحها، وفحص اختلاف الشكل العربي بصريًا عبر PDFium ومحرر Dart، ومقارنة نسخة `-edited.pdf` بـPython.
 
 راجع [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) و[`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md) و[`docs/QA_AND_LIMITATIONS.md`](docs/QA_AND_LIMITATIONS.md).

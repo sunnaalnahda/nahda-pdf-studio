@@ -7,7 +7,9 @@ import 'package:nahda_pdf_studio/core/pdf/dart_pdf_engine.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('Arabic annotation saves as an incremental PDF revision', (tester) async {
+  // This is an asynchronous I/O + font-loading test, not a widget test.
+  // testWidgets uses FakeAsync; awaiting rootBundle.load here can deadlock.
+  test('Arabic annotation saves as an incremental PDF revision', () async {
     final original = Uint8List.fromList(
       await File('tests/fixtures/vector_original.pdf').readAsBytes(),
     );
