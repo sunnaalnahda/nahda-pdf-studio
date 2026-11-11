@@ -63,6 +63,26 @@ flutter build apk --release
 
 إذا سبق تنفيذ `flutter create`، تستطيع استخدام ` .\scripts\bootstrap.ps1 -SkipFlutterCreate `.
 
+## تجربة Windows Desktop (اختبارية)
+
+المشروع يدعم تجربة بناء Windows، لكن ملفات Windows المُولّدة بواسطة Flutter لا تُخزَّن في هذا المستودع بعد. لتوليدها وبناء التطبيق على Windows:
+
+```powershell
+cd D:\Dev\nahda-pdf-studio
+git pull --ff-only origin main
+.\scripts\build_windows.ps1
+```
+
+يفحص السكربت توفر مترجم Visual C++ وملف `atlstr.h` الخاص بـATL، ويُنشئ مجلد `windows/` فقط إن لم يكن موجودًا، ويثبّت الحزم ويُشغّل التطبيق. لفحص PDF الأصلي وبناء نسخة Release:
+
+```powershell
+.\scripts\build_windows.ps1 -RunNativeTest -Release
+```
+
+ملفات Windows الناتجة توجد في `build\windows\x64\runner\Release\`، ويجب توزيع المجلد بما فيه من DLL وبيانات، لا ملف EXE وحده. يوجد أيضًا سير عمل GitHub Actions مستقل لبناء Windows تحت `.github/workflows/windows-desktop.yml`؛ ينشر مخرجاته كـArtifact بعد نجاح الاختبارات. **اختبارات CI ليست بديلًا عن التجربة اليدوية على Windows 11.**
+
+إذا ظهر الخطأ `atlstr.h` ففعّل `C++ ATL for latest v142 build tools (x86 & x64)` في Visual Studio 2019 Installer أو ما يعادله للإصدار المختار. وصول `flutter doctor` إلى `No issues found` لا يتحقق وحده من ATL. راجع [دليل Windows](docs/WINDOWS.md).
+
 ## تجربة إدراج النص العربي
 
 1. شغّل التطبيق وافتح `tests/fixtures/vector_original.pdf`، وهو ملف متجه من صفحتين.
