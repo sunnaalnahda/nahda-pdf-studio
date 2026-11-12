@@ -1,0 +1,50 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/android-build.yml'
+      - 'lib/**'
+      - 'pubspec.yaml'
+      - 'assets/**'
+
+jobs:
+  android-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+      - uses: android-actions/setup-android@v3
+      - name: Fetch licensed Arabic font
+        run: |
+          curl -fL --retry 3 'https://raw.githubusercontent.com/google/fonts/main/ofl/amiri/Amiri-Regular.ttf' -o assets/fonts/Amiri-Regular.ttf
+          curl -fL --retry 3 'https://raw.githubusercontent.com/google/fonts/main/ofl/amiri/OFL.txt' -o assets/fonts/Amiri-OFL.txt
+      - name: Generate Android project
+        run: flutter create --platforms=android --project-name nahda_pdf_studio --org com.nahda.pdfstudio .
+      - name: Remove generated Flutter counter test
+        run: |
+          if [ -f test/widget_test.dart ] && grep -q 'Counter increments smoke test' test/widget_test.dart && grep -q 'MyApp' test/widget_test.dart; then
+            rm test/widget_test.dart
+          fi
+      - run: flutter pub get
+      - run: flutter analyze
+      - name: Build Android release APK for testing
+        run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nahda-pdf-studio-android-test-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 14
+          if-no-files-found: error
