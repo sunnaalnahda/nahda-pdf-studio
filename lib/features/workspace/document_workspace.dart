@@ -72,7 +72,10 @@ class DocumentWorkspace<T extends PdfEditingSession> {
   }
 
   /// Releases one tab's PDF engine and selects a surviving tab.
-  bool close(OpenDocument<T> document) {
+  bool close(
+    OpenDocument<T> document, {
+    bool disposeSession = true,
+  }) {
     final index = _documents.indexWhere((item) => identical(item, document));
     if (index < 0) return false;
     final wasActive = identical(_active, document);
@@ -87,7 +90,7 @@ class DocumentWorkspace<T extends PdfEditingSession> {
         _active = _documents[newIndex];
       }
     }
-    document.session.dispose();
+    if (disposeSession) document.session.dispose();
     return true;
   }
 

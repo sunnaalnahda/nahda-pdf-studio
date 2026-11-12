@@ -173,7 +173,13 @@ class _WorkspacePageState extends State<WorkspacePage> {
       }
     }
     tab.session.controller.removeListener(_documentChanged);
-    setState(() { _documents.close(tab); });
+    setState(() {
+      _documents.close(tab, disposeSession: false);
+    });
+    // The editor widget must detach from the old controller before disposal.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      tab.session.dispose();
+    });
   }
 
   void _cycleTabs({bool backwards = false}) {
