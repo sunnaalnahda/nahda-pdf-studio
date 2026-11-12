@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nahda_pdf_studio/core/pdf/image_placement.dart';
 import 'package:nahda_pdf_studio/core/pdf/editing_engine.dart';
 import 'package:nahda_pdf_studio/features/workspace/document_workspace.dart';
 
@@ -43,6 +44,37 @@ class FakeSession implements PdfEditingSession {
   void appendPdf(Uint8List bytes) {}
   @override
   Uint8List extractPages(List<int> indices) => original;
+  @override
+  Future<void> insertImage(Uint8List bytes, {
+    required int pageIndex, required PdfImagePlacement placement,
+  }) async {}
+  @override
+  bool get hasSelectedImage => false;
+  @override
+  bool get canCropSelectedImage => false;
+  @override
+  bool cropSelectedImage({
+    required double left, required double right,
+    required double top, required double bottom,
+  }) => false;
+  @override
+  bool resetSelectedImageCrop() => false;
+  @override
+  bool rotateSelectedImage(double degrees) => false;
+  @override
+  bool resizeSelectedImage(double maxSidePoints) => false;
+  @override
+  bool moveSelectedImage(double dx, double dy) => false;
+  @override
+  bool removeSelectedImage() => false;
+  @override
+  double get selectedImageOpacity => 1;
+  @override
+  bool setSelectedImageOpacity(double opacity) => false;
+  @override
+  bool get canReplaceSelectedContentImage => false;
+  @override
+  Future<bool> replaceSelectedContentImage(Uint8List bytes) async => false;
   @override
   void undo() {}
   @override

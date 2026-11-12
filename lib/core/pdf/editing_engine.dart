@@ -52,6 +52,8 @@ abstract interface class PdfEditingSession {
   bool resizeSelectedImage(double maxSidePoints);
   bool moveSelectedImage(double dx, double dy);
   bool removeSelectedImage();
+  double get selectedImageOpacity;
+  bool setSelectedImageOpacity(double opacity);
   bool get canReplaceSelectedContentImage;
   Future<bool> replaceSelectedContentImage(Uint8List bytes);
   void undo();

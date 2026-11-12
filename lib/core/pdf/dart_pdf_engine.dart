@@ -243,6 +243,19 @@ class DartPdfSession implements PdfEditingSession {
   }
 
   @override
+  double get selectedImageOpacity =>
+      _isImageStamp ? (controller.selectedAnnotationStyle?.opacity ?? 1) : 1;
+
+  @override
+  bool setSelectedImageOpacity(double opacity) {
+    if (!_isImageStamp || !opacity.isFinite ||
+        opacity < 0.05 || opacity > 1) {
+      return false;
+    }
+    return controller.restyleSelected(opacity: opacity);
+  }
+
+  @override
   bool get canReplaceSelectedContentImage =>
       controller.canReplaceSelectedElementImage;
 
