@@ -7,8 +7,16 @@ class SelectedPdf {
   final Uint8List bytes;
 }
 
+class SelectedImage {
+  const SelectedImage(this.name, this.bytes);
+  final String name;
+  final Uint8List bytes;
+}
+
 abstract interface class PdfFileRepository {
   Future<SelectedPdf?> open();
+  Future<SelectedImage?> openImage();
+  Future<bool> saveImage(Uint8List bytes, String suggestedName);
   Future<bool> saveAs(Uint8List content, String name, {String? suggestedName});
 }
 
@@ -31,6 +39,31 @@ class LocalPdfFileRepository implements PdfFileRepository {
     }
     final bytes = await file.readAsBytes();
     return SelectedPdf(file.name, bytes);
+  }
+
+  @override
+  Future<SelectedImage?> openImage() async {
+    final file = await FilePicker.pickFile(
+      type: FileType.custom,
+      allowedExtensions: ['png', 'jpg', 'jpeg'],
+    );
+    if (file == null) return null;
+    final length = file.lengthSync() ?? await file.length();
+    if (length != null && length > 20 * 1024 * 1024) {
+      throw const FormatException('الصورة أكبر من الحد المسموح 20 MB.');
+    }
+    return SelectedImage(file.name, await file.readAsBytes());
+  }
+
+  @override
+  Future<bool> saveImage(Uint8List bytes, String suggestedName) async {
+    final result = await FilePicker.saveFile(
+      dialogTitle: 'حفظ صورة PNG',
+      fileName: suggestedName,
+      bytes: bytes,
+      mimeType: 'image/png',
+    );
+    return result != null;
   }
 
   @override
