@@ -7,6 +7,7 @@ import 'package:pdfrx/pdfrx.dart' as pdf_viewer;
 import '../../app/theme.dart';
 import '../../core/pdf/dart_pdf_engine.dart';
 import '../../core/pdf/local_file_repository.dart';
+import 'page_tools_dialog.dart';
 
 class WorkspacePage extends StatefulWidget {
   const WorkspacePage({
@@ -182,6 +183,93 @@ class _WorkspacePageState extends State<WorkspacePage> {
     }
   }
 
+  Future<void> _showPageTools() async {
+    final session = _session;
+    if (session == null || _busy) return;
+    final selected = session.controller.selectedPages;
+    final request = await showPageToolsDialog(
+      context,
+      pageCount: session.pageCount,
+      arabic: widget.arabic,
+      initialPageIndex: selected.isNotEmpty ? selected.first : 0,
+    );
+    if (!mounted || request == null || !identical(_session, session)) return;
+
+    if (request.action == PageToolAction.delete) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(t('تأكيد حذف الصفحة', 'Delete page?')),
+          content: Text(t(
+            'سيتم حذف الصفحة من النسخة المعدلة. يمكن التراجع قبل إغلاق المستند، ولن يتغير الملف الأصلي.',
+            'The page is removed from the edited copy. Undo is available until the document is closed; the original file is unchanged.',
+          )),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false),
+                child: Text(t('إلغاء', 'Cancel'))),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true),
+                child: Text(t('حذف', 'Delete'))),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted || !identical(_session, session)) return;
+    }
+
+    setState(() => _busy = true);
+    try {
+      switch (request.action) {
+        case PageToolAction.rotateLeft:
+          session.rotatePage(request.pageIndex!, -90);
+          break;
+        case PageToolAction.rotateRight:
+          session.rotatePage(request.pageIndex!, 90);
+          break;
+        case PageToolAction.duplicate:
+          session.duplicatePage(request.pageIndex!);
+          break;
+        case PageToolAction.move:
+          session.movePage(request.pageIndex!, request.destinationIndex!);
+          break;
+        case PageToolAction.delete:
+          session.removePage(request.pageIndex!);
+          break;
+        case PageToolAction.blankAfter:
+          session.addBlankPageAfter(request.pageIndex!);
+          break;
+        case PageToolAction.merge:
+          final incoming = await _files.open();
+          if (incoming == null || !mounted || !identical(_session, session)) return;
+          session.appendPdf(incoming.bytes);
+          break;
+        case PageToolAction.extract:
+          final bytes = session.extractPages(request.indices);
+          final base = session.filename.toLowerCase().endsWith('.pdf')
+              ? session.filename.substring(0, session.filename.length - 4)
+              : session.filename;
+          final count = request.indices.length;
+          final saved = await _files.saveAs(
+            bytes,
+            session.filename,
+            suggestedName: '$base-pages-$count.pdf',
+          );
+          if (saved) {
+            _toast(t('تم تصدير الصفحات إلى PDF مستقل.',
+                'Selected pages were exported into a new PDF.'));
+          }
+          return;
+      }
+      if (mounted) {
+        setState(() => _previewMode = false);
+        _toast(t('تم تنفيذ العملية. احفظ نسخة للاحتفاظ بالتغييرات.',
+            'Operation completed. Save a copy to keep changes.'));
+      }
+    } catch (error) {
+      _toast(t('تعذّر تنفيذ العملية: $error', 'Operation failed: $error'));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 1000;
@@ -252,8 +340,8 @@ class _WorkspacePageState extends State<WorkspacePage> {
         Text(t('قيد التطوير', 'COMING IN NEXT PHASES'),
           style: const TextStyle(color: Color(0xFF93A9BD), fontSize: 11)),
         const SizedBox(height: 12),
-        Text(t('استبدال النص الأصلي • إدارة الصفحات • OCR',
-          'Original text replacement • Page tools • OCR'),
+        Text(t('استبدال النص الأصلي • OCR • التشكيل العربي',
+          'Original text replacement • OCR • Arabic shaping'),
           style: const TextStyle(color: Color(0xFFB8C5D4), fontSize: 12, height: 1.6)),
         const Spacer(),
         const Divider(color: Color(0xFF33475D)),
@@ -261,7 +349,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
         Text(t('محلي وآمن • بدون رفع ملفات', 'OFFLINE-FIRST • NO UPLOADS'),
           style: const TextStyle(color: Color(0xFF9FADBC), fontSize: 11)),
         const SizedBox(height: 8),
-        const Text('v0.1.0', style: TextStyle(color: Color(0xFF9FADBC))),
+        const Text('v0.2.0', style: TextStyle(color: Color(0xFF9FADBC))),
       ],
     ),
   );
@@ -303,6 +391,11 @@ class _WorkspacePageState extends State<WorkspacePage> {
             onPressed: session == null || _busy ? null : _addArabicText,
             icon: const Icon(Icons.format_size_rounded, size: 19),
             label: Text(t('إضافة نص عربي', 'Arabic text')),
+          ),
+          OutlinedButton.icon(
+            onPressed: session == null || _busy ? null : _showPageTools,
+            icon: const Icon(Icons.layers_outlined, size: 18),
+            label: Text(t('إدارة الصفحات', 'Page tools')),
           ),
           OutlinedButton.icon(
             onPressed: session == null || _busy ? null : () => _save(),
@@ -366,8 +459,8 @@ class _WorkspacePageState extends State<WorkspacePage> {
                   style: const TextStyle(color: NahdaTheme.ink, fontSize: 24, fontWeight: FontWeight.w800)),
               const SizedBox(height: 14),
               Text(t(
-                'افتح ملف PDF من جهازك، أضف نصوصًا عربية بخط مضمّن، واحفظ نسخة جديدة دون تحويل الصفحات إلى صور.',
-                'Open a PDF locally, insert embedded Arabic text and save a new copy without rasterizing pages.'),
+                'افتح ملف PDF من جهازك، أدر الصفحات وأضف نصوصًا عربية، واحفظ نسخة جديدة دون تحويل الصفحات إلى صور.',
+                'Open a PDF locally, manage pages, insert Arabic text and save a new copy without rasterizing pages.'),
                 textAlign: TextAlign.center,
                 style: const TextStyle(height: 1.7, color: Color(0xFF59687A)),
               ),
