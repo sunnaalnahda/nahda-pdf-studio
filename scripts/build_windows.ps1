@@ -60,7 +60,7 @@ flutter analyze
 if ($LASTEXITCODE -ne 0) { throw 'flutter analyze failed' }
 
 if ($RunNativeTest) {
-  flutter test test/arabic_annotation_integration_test.dart --reporter expanded
+  flutter test test/arabic_annotation_integration_test.dart test/page_tools_integration_test.dart --reporter expanded
   if ($LASTEXITCODE -ne 0) { throw 'Native PDF integration test failed on Windows' }
 }
 
