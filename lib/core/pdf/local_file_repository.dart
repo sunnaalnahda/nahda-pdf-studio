@@ -41,8 +41,8 @@ class LocalPdfFileRepository implements PdfFileRepository {
   }) async {
     final outputName = suggestedName ??
         (name.toLowerCase().endsWith('.pdf')
-            ? name.substring(0, name.length - 4) + '-edited.pdf'
-            : name + '-edited.pdf');
+            ? '${name.substring(0, name.length - 4)}-edited.pdf'
+            : '$name-edited.pdf');
     final result = await FilePicker.saveFile(
       dialogTitle: 'حفظ نسخة PDF معدّلة',
       fileName: outputName,
