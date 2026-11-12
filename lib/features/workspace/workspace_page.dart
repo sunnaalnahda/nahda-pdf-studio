@@ -2,12 +2,14 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'package:dart_pdf_editor/dart_pdf_editor.dart' as editor;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:pdfrx/pdfrx.dart' as pdf_viewer;
 
 import '../../app/theme.dart';
 import '../../core/pdf/dart_pdf_engine.dart';
 import '../../core/pdf/local_file_repository.dart';
 import 'page_tools_dialog.dart';
+import 'document_workspace.dart';
 
 class WorkspacePage extends StatefulWidget {
   const WorkspacePage({
@@ -26,16 +28,24 @@ class WorkspacePage extends StatefulWidget {
 class _WorkspacePageState extends State<WorkspacePage> {
   final _engine = const DartPdfEngine();
   final _files = const LocalPdfFileRepository();
-  DartPdfSession? _session;
+  final _documents = DocumentWorkspace<DartPdfSession>();
   bool _busy = false;
-  bool _previewMode = false;
+
+  DartPdfSession? get _session => _documents.active?.session;
+  bool get _previewMode => _documents.active?.previewMode ?? false;
+  set _previewMode(bool value) {
+    final tab = _documents.active;
+    if (tab != null) tab.previewMode = value;
+  }
 
   String t(String ar, String en) => widget.arabic ? ar : en;
 
   @override
   void dispose() {
-    _session?.controller.removeListener(_documentChanged);
-    _session?.dispose();
+    for (final document in _documents.documents) {
+      document.session.controller.removeListener(_documentChanged);
+    }
+    _documents.dispose();
     super.dispose();
   }
 
@@ -48,41 +58,44 @@ class _WorkspacePageState extends State<WorkspacePage> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  bool _containsSession(DartPdfSession session) =>
+      _documents.documents.any((tab) => identical(tab.session, session));
+
   Future<void> _open() async {
     if (_busy) return;
-    if (_session?.isModified ?? false) {
-      final discard = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(t('تعديلات لم تُحفظ', 'Unsaved changes')),
-          content: Text(t(
-            'احفظ نسخة من المستند الحالي قبل فتح ملف آخر، أو تابع دون حفظ.',
-            'Save your current edits before opening another file, or discard them.',
-          )),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(t('إلغاء', 'Cancel'))),
-            TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(t('متابعة دون حفظ', 'Discard'))),
-          ],
-        ),
-      );
-      if (discard != true) return;
+    if (!_documents.canOpen(0)) {
+      _toast(t(
+        'الحد الأقصى ${_documents.maxTabs} مستندات مفتوحة. أغلق تبويبًا قبل إضافة ملف.',
+        'Maximum ${_documents.maxTabs} open documents. Close a tab first.',
+      ));
+      return;
     }
     setState(() => _busy = true);
     try {
       final selected = await _files.open();
-      if (selected == null) return;
-      final opened = await _engine.open(filename: selected.name, data: selected.bytes);
+      if (selected == null || !mounted) return;
+      if (!_documents.canOpen(selected.bytes.length)) {
+        throw FormatException(t(
+          'الحد الأقصى لمجموع الملفات المفتوحة 160 ميجابايت. احفظ وأغلق بعض الملفات أولًا.',
+          'Open PDFs exceed the 160 MB combined memory budget. Close unused tabs.',
+        ));
+      }
+      final opened = await _engine.open(
+        filename: selected.name,
+        data: selected.bytes,
+      );
       if (!mounted) {
         opened.dispose();
         return;
       }
-      _session?.controller.removeListener(_documentChanged);
-      _session?.dispose();
-      opened.controller.addListener(_documentChanged);
-      setState(() {
-        _session = opened;
-        _previewMode = false;
-      });
+      try {
+        _documents.add(opened);
+        opened.controller.addListener(_documentChanged);
+      } catch (_) {
+        opened.dispose();
+        rethrow;
+      }
+      setState(() {});
     } catch (error) {
       _toast(t('فشل فتح الملف: $error', 'Unable to open PDF: $error'));
     } finally {
@@ -90,22 +103,82 @@ class _WorkspacePageState extends State<WorkspacePage> {
     }
   }
 
-  Future<void> _save([Uint8List? editedBytes]) async {
-    final session = _session;
-    if (session == null || _busy) return;
+  /// Save a specific session, never a tab that might become active later.
+  /// Returns false when Save As is canceled or fails.
+  Future<bool> _saveSession(
+    DartPdfSession session, [
+    Uint8List? editedBytes,
+  ]) async {
+    if (_busy || !_containsSession(session)) return false;
     setState(() => _busy = true);
     try {
-      final saved = await _files.saveAs(editedBytes ?? session.current, session.filename);
+      final savedRevision = session.controller.revisionId;
+      final bytes = Uint8List.fromList(editedBytes ?? session.current);
+      final saved = await _files.saveAs(bytes, session.filename);
       if (saved) {
-        session.markSaved();
+        // Do not mark later edits as saved if the document changed during I/O.
+        if (savedRevision == session.controller.revisionId) {
+          session.markSaved();
+        }
         if (mounted) setState(() {});
         _toast(t('تم حفظ نسخة جديدة من المستند.', 'A new PDF copy was saved.'));
       }
+      return saved;
     } catch (error) {
       _toast(t('تعذر حفظ الملف: $error', 'Unable to save PDF: $error'));
+      return false;
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _save() async {
+    final session = _session;
+    if (session != null) await _saveSession(session);
+  }
+
+  Future<void> _closeTab(OpenDocument<DartPdfSession> tab) async {
+    if (_busy || !_documents.contains(tab)) return;
+    if (tab.session.isModified) {
+      final choice = await showDialog<_CloseChoice>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(t('تعديلات لم تُحفظ', 'Unsaved PDF edits')),
+          content: Text(t(
+            'يوجد تعديل غير محفوظ في ${tab.session.filename}. هل تريد حفظ نسخة قبل إغلاقه؟',
+            'There are unsaved edits in ${tab.session.filename}. Save a copy before closing?',
+          )),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(t('إلغاء', 'Cancel')),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, _CloseChoice.discard),
+              child: Text(t('إغلاق دون حفظ', 'Discard edits')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, _CloseChoice.save),
+              child: Text(t('حفظ نسخة وإغلاق', 'Save copy and close')),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || !_documents.contains(tab) || choice == null) return;
+      if (choice == _CloseChoice.save) {
+        final saved = await _saveSession(tab.session);
+        if (!saved || !mounted || !_documents.contains(tab)) return;
+        // A new revision during asynchronous saving must not be discarded.
+        if (tab.session.isModified) return;
+      }
+    }
+    tab.session.controller.removeListener(_documentChanged);
+    setState(() { _documents.close(tab); });
+  }
+
+  void _cycleTabs({bool backwards = false}) {
+    if (_busy || _documents.count < 2) return;
+    setState(() => _documents.cycle(backwards: backwards));
   }
 
   Future<void> _addArabicText() async {
@@ -161,7 +234,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
           ],
         ),
       );
-      if (confirmed != true) return;
+      if (confirmed != true || !mounted || !_containsSession(session)) return;
       final parsedPage = int.tryParse(page.text.trim());
       final parsedSize = double.tryParse(size.text.trim());
       if (parsedPage == null || parsedSize == null || parsedSize < 8 || parsedSize > 72) {
@@ -274,7 +347,20 @@ class _WorkspacePageState extends State<WorkspacePage> {
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 1000;
     final session = _session;
-    return Scaffold(
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyO, control: true):
+            () => unawaited(_open()),
+        const SingleActivator(LogicalKeyboardKey.keyS, control: true):
+            () => unawaited(_save()),
+        const SingleActivator(LogicalKeyboardKey.tab, control: true):
+            () => _cycleTabs(),
+        const SingleActivator(LogicalKeyboardKey.tab, control: true, shift: true):
+            () => _cycleTabs(backwards: true),
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
       appBar: AppBar(
         toolbarHeight: 70,
         titleSpacing: 20,
@@ -315,12 +401,15 @@ class _WorkspacePageState extends State<WorkspacePage> {
             child: Column(
               children: [
                 _toolbar(session, wide),
+                if (_documents.count > 0) _tabStrip(),
                 Expanded(child: session == null ? _emptyState() : _documentArea(session)),
                 _statusBar(session),
               ],
             ),
           ),
         ],
+      ),
+        ),
       ),
     );
   }
@@ -336,6 +425,10 @@ class _WorkspacePageState extends State<WorkspacePage> {
           style: const TextStyle(color: NahdaTheme.gold, letterSpacing: 1.6, fontSize: 11)),
         const SizedBox(height: 22),
         _sideEntry(Icons.description_outlined, t('المستندات', 'Documents'), selected: true),
+        const SizedBox(height: 14),
+        Text(t('مستندات مفتوحة: ${_documents.count}/${_documents.maxTabs}',
+          'Open PDFs: ${_documents.count}/${_documents.maxTabs}'),
+          style: const TextStyle(color: Color(0xFFB8C5D4), fontSize: 12)),
         const SizedBox(height: 26),
         Text(t('قيد التطوير', 'COMING IN NEXT PHASES'),
           style: const TextStyle(color: Color(0xFF93A9BD), fontSize: 11)),
@@ -349,7 +442,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
         Text(t('محلي وآمن • بدون رفع ملفات', 'OFFLINE-FIRST • NO UPLOADS'),
           style: const TextStyle(color: Color(0xFF9FADBC), fontSize: 11)),
         const SizedBox(height: 8),
-        const Text('v0.2.0', style: TextStyle(color: Color(0xFF9FADBC))),
+        const Text('v0.3.0', style: TextStyle(color: Color(0xFF9FADBC))),
       ],
     ),
   );
@@ -370,6 +463,88 @@ class _WorkspacePageState extends State<WorkspacePage> {
       ))),
     ]),
   );
+
+  Widget _tabStrip() {
+    return Container(
+      height: 54,
+      decoration: const BoxDecoration(
+        color: Color(0xFFF4F7FB),
+        border: Border(bottom: BorderSide(color: Color(0xFFE2E9F1))),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Row(children: [
+        Expanded(
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              for (final tab in _documents.documents)
+                Padding(
+                  padding: const EdgeInsetsDirectional.only(end: 8),
+                  child: SizedBox(
+                    width: 224,
+                    child: Material(
+                      color: identical(_documents.active, tab)
+                          ? Colors.white : const Color(0xFFE9EFF6),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(9),
+                        side: BorderSide(
+                          color: identical(_documents.active, tab)
+                              ? NahdaTheme.blue
+                              : const Color(0xFFD7E1EB),
+                        ),
+                      ),
+                      child: InkWell(
+                        key: ValueKey('pdf-tab-${tab.id}'),
+                        borderRadius: BorderRadius.circular(9),
+                        onTap: _busy ? null : () =>
+                            setState(() => _documents.activate(tab)),
+                        child: Padding(
+                          padding: const EdgeInsetsDirectional.only(start: 9),
+                          child: Row(children: [
+                            const Icon(Icons.picture_as_pdf_outlined,
+                                size: 18, color: NahdaTheme.blue),
+                            const SizedBox(width: 6),
+                            Expanded(child: Tooltip(
+                              message: tab.session.filename,
+                              child: Text(
+                                tab.session.filename,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 12,
+                                    fontWeight: FontWeight.w600),
+                              ),
+                            )),
+                            if (tab.session.isModified)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 3),
+                                child: Icon(Icons.circle,
+                                    size: 8, color: Color(0xFFCA8B3C)),
+                              ),
+                            IconButton(
+                              tooltip: t('إغلاق المستند', 'Close document'),
+                              visualDensity: VisualDensity.compact,
+                              icon: const Icon(Icons.close_rounded, size: 17),
+                              onPressed: _busy ? null :
+                                  () => unawaited(_closeTab(tab)),
+                            ),
+                          ]),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 6),
+        IconButton.filledTonal(
+          tooltip: t('فتح مستند آخر', 'Open another PDF'),
+          onPressed: _busy ? null : _open,
+          icon: const Icon(Icons.add_rounded),
+        ),
+      ]),
+    );
+  }
 
   Widget _toolbar(DartPdfSession? session, bool wide) {
     return Container(
@@ -498,8 +673,8 @@ class _WorkspacePageState extends State<WorkspacePage> {
       : editor.PdfEditorView(
           key: ValueKey(session),
           controller: session.controller,
-          onSave: (bytes) => unawaited(_save(bytes)),
-          onSaveAs: (bytes) => unawaited(_save(bytes)),
+          onSave: (bytes) => unawaited(_saveSession(session, bytes)),
+          onSaveAs: (bytes) => unawaited(_saveSession(session, bytes)),
           showSaveButton: false,
         ),
   );
@@ -520,3 +695,5 @@ class _WorkspacePageState extends State<WorkspacePage> {
     ),
   );
 }
+
+enum _CloseChoice { save, discard }
