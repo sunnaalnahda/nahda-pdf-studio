@@ -218,7 +218,9 @@ class _WorkspacePageState extends State<WorkspacePage> {
   void _fitPage(DartPdfSession session) {
     if (_previewMode || !identical(_session, session) ||
         _editorAreaSize.width <= 0 || _editorAreaSize.height <= 0 ||
-        session.pageCount < 1) return;
+        session.pageCount < 1) {
+      return;
+    }
     final viewer = _editorViewers[session];
     if (viewer == null) return;
 
