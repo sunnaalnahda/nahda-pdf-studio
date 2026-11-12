@@ -181,6 +181,116 @@ class _WorkspacePageState extends State<WorkspacePage> {
     setState(() => _documents.cycle(backwards: backwards));
   }
 
+  Future<void> _saveAllModified() async {
+    if (_busy) return;
+    final modified = _documents.documents
+        .where((tab) => tab.session.isModified).toList();
+    if (modified.isEmpty) {
+      _toast(t('لا توجد تعديلات للحفظ.', 'There are no unsaved edits.'));
+      return;
+    }
+    var savedCount = 0;
+    for (final tab in modified) {
+      if (!mounted || !_documents.contains(tab)) return;
+      final saved = await _saveSession(tab.session);
+      if (!saved || !mounted) {
+        _toast(t('توقف الحفظ. المستندات المتبقية لم تُحفظ.',
+          'Saving stopped. Remaining documents were not saved.'));
+        return;
+      }
+      savedCount++;
+    }
+    _toast(t('تم حفظ نسخ من $savedCount مستندات.',
+      'Saved copies of $savedCount documents.'));
+  }
+
+  Future<void> _showShortcuts() => showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(t('اختصارات لوحة المفاتيح', 'Keyboard shortcuts')),
+      content: SizedBox(
+        width: 390,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(t('Ctrl+O — فتح مستند PDF', 'Ctrl+O — Open PDF')),
+            const SizedBox(height: 8),
+            Text(t('Ctrl+S — حفظ نسخة', 'Ctrl+S — Save a copy')),
+            const SizedBox(height: 8),
+            Text(t('Ctrl+Tab — المستند التالي', 'Ctrl+Tab — Next tab')),
+            const SizedBox(height: 8),
+            Text(t('Ctrl+Shift+Tab — المستند السابق',
+                'Ctrl+Shift+Tab — Previous tab')),
+            const SizedBox(height: 14),
+            Text(t(
+              'قد يحتفظ المتصفح ببعض الاختصارات لنفسه. تعمل أزرار التطبيق أيضًا دون لوحة مفاتيح.',
+              'Browsers may reserve some shortcuts. All commands are also available through buttons.',
+            ), style: Theme.of(ctx).textTheme.bodySmall),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx),
+          child: Text(t('إغلاق', 'Close'))),
+      ],
+    ),
+  );
+
+  Future<void> _showDetails() async {
+    final session = _session;
+    if (session == null) return;
+    final size = (session.original.length / (1024 * 1024)).toStringAsFixed(2);
+    final changed = (session.current.length / (1024 * 1024)).toStringAsFixed(2);
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(t('معلومات المستند', 'Document details')),
+        content: SizedBox(width: 400, child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SelectableText(session.filename,
+                style: Theme.of(ctx).textTheme.titleMedium),
+            const SizedBox(height: 12),
+            Text(t('الصفحات: ${session.pageCount}',
+                'Pages: ${session.pageCount}')),
+            Text(t('حجم الملف الأصلي: $size ميجابايت',
+                'Original size: $size MB')),
+            Text(t('حجم النسخة الحالية: $changed ميجابايت',
+                'Current size: $changed MB')),
+            const SizedBox(height: 10),
+            Text(session.isModified
+                ? t('يوجد تعديل غير محفوظ', 'Unsaved changes')
+                : t('لا توجد تعديلات غير محفوظة', 'No unsaved edits')),
+            const SizedBox(height: 14),
+            Text(t('تُعالج الملفات محليًا داخل الجهاز، ولا تُرفع إلى خادم.',
+                'PDF files are processed locally and are not uploaded to a server.'),
+                style: Theme.of(ctx).textTheme.bodySmall),
+          ],
+        )),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx),
+              child: Text(t('إغلاق', 'Close'))),
+        ],
+      ),
+    );
+  }
+
+  void _handleWorkspaceAction(_WorkspaceAction action) {
+    switch (action) {
+      case _WorkspaceAction.saveAll:
+        unawaited(_saveAllModified());
+      case _WorkspaceAction.close:
+        final active = _documents.active;
+        if (active != null) unawaited(_closeTab(active));
+      case _WorkspaceAction.details:
+        unawaited(_showDetails());
+      case _WorkspaceAction.shortcuts:
+        unawaited(_showShortcuts());
+    }
+  }
+
   Future<void> _addArabicText() async {
     final session = _session;
     if (session == null) return;
@@ -577,6 +687,35 @@ class _WorkspacePageState extends State<WorkspacePage> {
             icon: const Icon(Icons.save_alt_rounded, size: 18),
             label: Text(t('حفظ نسخة', 'Save copy')),
           ),
+          PopupMenuButton<_WorkspaceAction>(
+            tooltip: t('المزيد من الأدوات', 'More tools'),
+            onSelected: _handleWorkspaceAction,
+            icon: const Icon(Icons.more_horiz_rounded),
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: _WorkspaceAction.saveAll,
+                enabled: !_busy &&
+                    _documents.documents.any((tab) => tab.session.isModified),
+                child: Text(t('حفظ نسخ من كل الملفات المعدّلة',
+                    'Save all modified PDFs')),
+              ),
+              PopupMenuItem(
+                value: _WorkspaceAction.close,
+                enabled: !_busy && session != null,
+                child: Text(t('إغلاق المستند الحالي', 'Close active PDF')),
+              ),
+              PopupMenuItem(
+                value: _WorkspaceAction.details,
+                enabled: session != null,
+                child: Text(t('معلومات المستند', 'Document details')),
+              ),
+              PopupMenuItem(
+                value: _WorkspaceAction.shortcuts,
+                child: Text(t('اختصارات لوحة المفاتيح',
+                    'Keyboard shortcuts')),
+              ),
+            ],
+          ),
           if (session != null) ...[
             IconButton(
               tooltip: t('تراجع', 'Undo'),
@@ -697,3 +836,5 @@ class _WorkspacePageState extends State<WorkspacePage> {
 }
 
 enum _CloseChoice { save, discard }
+
+enum _WorkspaceAction { saveAll, close, details, shortcuts }
