@@ -9,6 +9,7 @@ import '../../app/theme.dart';
 import '../../core/pdf/dart_pdf_engine.dart';
 import '../../core/pdf/local_file_repository.dart';
 import '../../core/pdf/image_info.dart';
+import '../../core/pdf/page_fit_zoom.dart';
 import 'image_tools_dialog.dart';
 import 'page_tools_dialog.dart';
 import 'document_workspace.dart';
@@ -31,6 +32,9 @@ class _WorkspacePageState extends State<WorkspacePage> {
   final _engine = const DartPdfEngine();
   final _files = const LocalPdfFileRepository();
   final _documents = DocumentWorkspace<DartPdfSession>();
+  // One viewer per PDF tab, so zoom/navigation cannot leak between documents.
+  final Map<DartPdfSession, editor.PdfViewerController> _editorViewers = {};
+  Size _editorAreaSize = Size.zero;
   bool _busy = false;
 
   DartPdfSession? get _session => _documents.active?.session;
@@ -47,6 +51,10 @@ class _WorkspacePageState extends State<WorkspacePage> {
     for (final document in _documents.documents) {
       document.session.controller.removeListener(_documentChanged);
     }
+    for (final viewer in _editorViewers.values) {
+      viewer.dispose();
+    }
+    _editorViewers.clear();
     _documents.dispose();
     super.dispose();
   }
@@ -92,12 +100,14 @@ class _WorkspacePageState extends State<WorkspacePage> {
       }
       try {
         _documents.add(opened);
+        _editorViewers[opened] = editor.PdfViewerController();
         opened.controller.addListener(_documentChanged);
       } catch (_) {
         opened.dispose();
         rethrow;
       }
       setState(() {});
+      _scheduleFitPage(opened);
     } catch (error) {
       _toast(t('فشل فتح الملف: $error', 'Unable to open PDF: $error'));
     } finally {
@@ -179,11 +189,13 @@ class _WorkspacePageState extends State<WorkspacePage> {
       }
     }
     tab.session.controller.removeListener(_documentChanged);
+    final viewer = _editorViewers.remove(tab.session);
     setState(() {
       _documents.close(tab, disposeSession: false);
     });
-    // The editor widget must detach from the old controller before disposal.
+    // Unmount PdfEditorView before releasing its borrowed viewer/controller.
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      viewer?.dispose();
       tab.session.dispose();
     });
   }
@@ -191,6 +203,45 @@ class _WorkspacePageState extends State<WorkspacePage> {
   void _cycleTabs({bool backwards = false}) {
     if (_busy || _documents.count < 2) return;
     setState(() => _documents.cycle(backwards: backwards));
+  }
+
+  /// A restored per-document viewport may override PdfEditorView.initialFit.
+  /// Apply an explicit fit after the editor is attached, including when a
+  /// user returns from the separate PDFium preview.
+  void _scheduleFitPage(DartPdfSession session) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _previewMode || !identical(_session, session)) return;
+      _fitPage(session);
+    });
+  }
+
+  void _fitPage(DartPdfSession session) {
+    if (_previewMode || !identical(_session, session) ||
+        _editorAreaSize.width <= 0 || _editorAreaSize.height <= 0 ||
+        session.pageCount < 1) return;
+    final viewer = _editorViewers[session];
+    if (viewer == null) return;
+
+    final pageIndex = viewer.currentPage.clamp(0, session.pageCount - 1);
+    final page = session.controller.document.page(pageIndex);
+    final crop = page.cropBox;
+    final sideways = page.rotation % 180 != 0;
+    final pageWidth = sideways ? crop.height : crop.width;
+    final pageHeight = sideways ? crop.width : crop.height;
+    final zoom = pdfEditorFitPageZoom(
+      pageWidth: pageWidth,
+      pageHeight: pageHeight,
+      hostWidth: _editorAreaSize.width,
+      hostHeight: _editorAreaSize.height,
+    );
+    viewer.restoreViewport(editor.PdfViewport(page: pageIndex, zoom: zoom));
+  }
+
+  void _switchViewMode(bool preview) {
+    if (preview == _previewMode) return;
+    final session = _session;
+    setState(() => _previewMode = preview);
+    if (!preview && session != null) _scheduleFitPage(session);
   }
 
   Future<void> _saveAllModified() async {
@@ -970,8 +1021,15 @@ class _WorkspacePageState extends State<WorkspacePage> {
                 ButtonSegment(value: true, icon: const Icon(Icons.visibility_outlined, size: 17), label: Text(t('PDFium', 'PDFium'))),
               ],
               selected: {_previewMode},
-              onSelectionChanged: (v) => setState(() => _previewMode = v.first),
+              onSelectionChanged: (v) => _switchViewMode(v.first),
             ),
+            if (!_previewMode)
+              OutlinedButton.icon(
+                key: const ValueKey('pdf-fit-page'),
+                onPressed: () => _fitPage(session),
+                icon: const Icon(Icons.fit_screen_outlined, size: 18),
+                label: Text(t('إظهار الصفحة كاملة', 'Fit page')),
+              ),
           ],
           if (_busy) const Padding(
             padding: EdgeInsets.symmetric(horizontal: 8),
@@ -1039,7 +1097,9 @@ class _WorkspacePageState extends State<WorkspacePage> {
       border: Border.all(color: const Color(0xFFE2E9F1)),
     ),
     clipBehavior: Clip.antiAlias,
-    child: _previewMode
+    child: LayoutBuilder(builder: (context, constraints) {
+      _editorAreaSize = Size(constraints.maxWidth, constraints.maxHeight);
+      return _previewMode
       ? pdf_viewer.PdfViewer.data(
           session.current,
           sourceName: '${session.filename}#rev${session.controller.revisionId}',
@@ -1048,6 +1108,8 @@ class _WorkspacePageState extends State<WorkspacePage> {
       : editor.PdfEditorView(
           key: ValueKey(session),
           controller: session.controller,
+          viewerController: _editorViewers[session],
+          initialFit: editor.PdfViewerFit.page,
           imagePicker: _pickImageBytes,
           onExportSelectedContentImage: (ctx, image) async {
             try {
@@ -1068,7 +1130,8 @@ class _WorkspacePageState extends State<WorkspacePage> {
           onSave: (bytes) => unawaited(_saveSession(session, bytes)),
           onSaveAs: (bytes) => unawaited(_saveSession(session, bytes)),
           showSaveButton: false,
-        ),
+        );
+    }),
   );
 
   Widget _statusBar(DartPdfSession? session) => Container(
