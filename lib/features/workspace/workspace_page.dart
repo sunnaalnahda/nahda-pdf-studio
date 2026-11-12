@@ -8,6 +8,8 @@ import 'package:pdfrx/pdfrx.dart' as pdf_viewer;
 import '../../app/theme.dart';
 import '../../core/pdf/dart_pdf_engine.dart';
 import '../../core/pdf/local_file_repository.dart';
+import '../../core/pdf/image_info.dart';
+import 'image_tools_dialog.dart';
 import 'page_tools_dialog.dart';
 import 'document_workspace.dart';
 
@@ -301,6 +303,187 @@ class _WorkspacePageState extends State<WorkspacePage> {
     }
   }
 
+  /// Also enables the built-in image tool inside PdfEditorView.
+  Future<Uint8List?> _pickImageBytes(BuildContext context) async {
+    try {
+      final selected = await _files.openImage();
+      if (selected == null) return null;
+      PdfImageInfo.inspect(selected.bytes);
+      return selected.bytes;
+    } catch (error) {
+      _toast(t('تعذر تحميل الصورة: $error',
+        'Unable to load image: $error'));
+      return null;
+    }
+  }
+
+  Future<void> _insertImage() async {
+    final session = _session;
+    if (session == null || _busy) return;
+    try {
+      final selected = await _files.openImage();
+      if (selected == null || !mounted ||
+          !identical(_session, session)) return;
+      final info = PdfImageInfo.inspect(selected.bytes);
+      final request = await showInsertImageDialog(
+        context,
+        imageBytes: selected.bytes,
+        info: info,
+        filename: selected.name,
+        pageCount: session.pageCount,
+        arabic: widget.arabic,
+      );
+      if (request == null || !mounted || _busy ||
+          !identical(_session, session)) return;
+
+      setState(() {
+        _previewMode = false;
+        _busy = true;
+      });
+      try {
+        await session.insertImage(
+          selected.bytes,
+          pageIndex: request.pageIndex,
+          placement: request.placement,
+        );
+        _toast(t(
+          'تم إدراج الصورة كعنصر PDF مستقل؛ يمكنك تحريكها وقصها وتغيير حجمها.',
+          'Image embedded as a separate PDF object. You can move, crop and resize it.',
+        ));
+      } finally {
+        if (mounted) setState(() => _busy = false);
+      }
+    } catch (error) {
+      _toast(t('تعذر إدراج الصورة: $error',
+          'Unable to insert image: $error'));
+    }
+  }
+
+  Future<void> _editSelectedImage() async {
+    final session = _session;
+    if (session == null || _busy) return;
+    if (!session.hasSelectedImage) {
+      _toast(t(
+        'حدد صورة مضافة من وضع التحرير أولًا، ثم افتح أدوات الصور.',
+        'Select an inserted Stamp image in Edit mode first.',
+      ));
+      return;
+    }
+    final request = await showImageEditDialog(
+      context,
+      arabic: widget.arabic,
+      canCrop: session.canCropSelectedImage,
+      currentOpacity: session.selectedImageOpacity,
+    );
+    if (request == null || !mounted || _busy ||
+        !identical(_session, session)) return;
+
+    if (request.action == ImageEditAction.delete) {
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(t('حذف الصورة المحددة؟', 'Delete selected image?')),
+          content: Text(t(
+            'سيُحذف عنصر الصورة من النسخة المعدلة فقط، ويمكن التراجع قبل إغلاق الملف.',
+            'Removes only this image object from the edited PDF. Undo remains available.',
+          )),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(t('إلغاء', 'Cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(t('حذف الصورة', 'Delete image')),
+            ),
+          ],
+        ),
+      );
+      if (proceed != true || !mounted ||
+          !identical(_session, session)) return;
+    }
+
+    try {
+      final ok = switch (request.action) {
+        ImageEditAction.rotateLeft => session.rotateSelectedImage(-90),
+        ImageEditAction.rotateRight => session.rotateSelectedImage(90),
+        ImageEditAction.resize => session.resizeSelectedImage(request.value),
+        ImageEditAction.crop => session.cropSelectedImage(
+          left: request.crop[0],
+          right: request.crop[1],
+          top: request.crop[2],
+          bottom: request.crop[3],
+        ),
+        ImageEditAction.resetCrop => session.resetSelectedImageCrop(),
+        ImageEditAction.opacity => session.setSelectedImageOpacity(request.value),
+        ImageEditAction.moveLeft => session.moveSelectedImage(-10, 0),
+        ImageEditAction.moveRight => session.moveSelectedImage(10, 0),
+        ImageEditAction.moveUp => session.moveSelectedImage(0, 10),
+        ImageEditAction.moveDown => session.moveSelectedImage(0, -10),
+        ImageEditAction.delete => session.removeSelectedImage(),
+      };
+      if (!ok) {
+        _toast(t('هذه العملية غير متاحة للصورة المحددة.',
+            'This operation is not available for the selected image.'));
+      } else {
+        setState(() => _previewMode = false);
+        _toast(t('تم تعديل الصورة. استخدم حفظ نسخة لحفظ PDF.',
+            'Image updated. Save a new PDF copy to keep changes.'));
+      }
+    } catch (error) {
+      _toast(t('تعذّر تعديل الصورة: $error',
+        'Image edit failed: $error'));
+    }
+  }
+
+  Future<void> _replaceOriginalImage() async {
+    final session = _session;
+    if (session == null || _busy) return;
+    if (!session.canReplaceSelectedContentImage) {
+      _toast(t(
+        'اختر أداة «المحتوى» من شريط تحرير PDF، ثم انقر الصورة الأصلية أولًا.',
+        'Select the Content tool in the PDF editor and click the existing page image first.',
+      ));
+      return;
+    }
+    try {
+      final selected = await _files.openImage();
+      if (selected == null || !mounted ||
+          !identical(_session, session)) return;
+      PdfImageInfo.inspect(selected.bytes);
+      setState(() => _busy = true);
+      try {
+        final ok = await session.replaceSelectedContentImage(selected.bytes);
+        if (!ok) {
+          throw const FormatException('تعذر استبدال عنصر الصورة المحدد.');
+        }
+        _toast(t(
+          'تم استبدال الصورة الأصلية المحددة، مع إبقاء الرسومات المجاورة.',
+          'Selected original page image replaced while retaining neighboring content.',
+        ));
+      } finally {
+        if (mounted) setState(() => _busy = false);
+      }
+    } catch (error) {
+      _toast(t('تعذر استبدال الصورة: $error',
+          'Unable to replace image: $error'));
+    }
+  }
+
+  void _handleImageMenu(_ImageMenuAction action) {
+    switch (action) {
+      case _ImageMenuAction.insert:
+        unawaited(_insertImage());
+        break;
+      case _ImageMenuAction.edit:
+        unawaited(_editSelectedImage());
+        break;
+      case _ImageMenuAction.replace:
+        unawaited(_replaceOriginalImage());
+        break;
+    }
+  }
+
   Future<void> _addArabicText() async {
     final session = _session;
     if (session == null) return;
@@ -562,7 +745,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
         Text(t('محلي وآمن • بدون رفع ملفات', 'OFFLINE-FIRST • NO UPLOADS'),
           style: const TextStyle(color: Color(0xFF9FADBC), fontSize: 11)),
         const SizedBox(height: 8),
-        const Text('v0.3.0', style: TextStyle(color: Color(0xFF9FADBC))),
+        const Text('v0.4.0', style: TextStyle(color: Color(0xFF9FADBC))),
       ],
     ),
   );
@@ -686,6 +869,29 @@ class _WorkspacePageState extends State<WorkspacePage> {
             onPressed: session == null || _busy ? null : _addArabicText,
             icon: const Icon(Icons.format_size_rounded, size: 19),
             label: Text(t('إضافة نص عربي', 'Arabic text')),
+          ),
+          PopupMenuButton<_ImageMenuAction>(
+            tooltip: t('استوديو الصور', 'Image studio'),
+            enabled: session != null && !_busy,
+            onSelected: _handleImageMenu,
+            icon: const Icon(Icons.image_outlined),
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: _ImageMenuAction.insert,
+                child: Text(t('إدراج صورة PNG أو JPEG',
+                    'Insert PNG or JPEG image')),
+              ),
+              PopupMenuItem(
+                value: _ImageMenuAction.edit,
+                child: Text(t('تدوير وقص وتحريك الصورة المحددة',
+                    'Edit selected image')),
+              ),
+              PopupMenuItem(
+                value: _ImageMenuAction.replace,
+                child: Text(t('استبدال صورة أصلية داخل PDF',
+                    'Replace original PDF image')),
+              ),
+            ],
           ),
           OutlinedButton.icon(
             onPressed: session == null || _busy ? null : _showPageTools,
@@ -822,6 +1028,23 @@ class _WorkspacePageState extends State<WorkspacePage> {
       : editor.PdfEditorView(
           key: ValueKey(session),
           controller: session.controller,
+          imagePicker: _pickImageBytes,
+          onExportSelectedContentImage: (ctx, image) async {
+            try {
+              final base = session.filename.toLowerCase().endsWith('.pdf')
+                  ? session.filename.substring(0, session.filename.length - 4)
+                  : session.filename;
+              final filename = '$base-image-page-${image.pageIndex + 1}.png';
+              final saved = await _files.saveImage(image.pngBytes, filename);
+              if (saved) {
+                _toast(t('تم تصدير صورة PNG مستقلة.',
+                    'Selected image exported as PNG.'));
+              }
+            } catch (error) {
+              _toast(t('تعذر تصدير الصورة: $error',
+                'Unable to export image: $error'));
+            }
+          },
           onSave: (bytes) => unawaited(_saveSession(session, bytes)),
           onSaveAs: (bytes) => unawaited(_saveSession(session, bytes)),
           showSaveButton: false,
@@ -848,3 +1071,5 @@ class _WorkspacePageState extends State<WorkspacePage> {
 enum _CloseChoice { save, discard }
 
 enum _WorkspaceAction { saveAll, close, details, shortcuts }
+
+enum _ImageMenuAction { insert, edit, replace }
