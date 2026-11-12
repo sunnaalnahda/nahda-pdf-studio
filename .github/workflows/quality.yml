@@ -41,7 +41,7 @@ jobs:
       - run: flutter pub get
       - run: flutter analyze
       - name: Run Web browser smoke and editor-contract tests
-        run: flutter test -d chrome test/workspace_smoke_test.dart test/pdf_engine_interface_test.dart test/page_selection_test.dart test/page_tools_dialog_test.dart test/document_workspace_test.dart test/image_info_test.dart test/image_placement_test.dart test/image_tools_dialog_test.dart
+        run: flutter test -d chrome test/workspace_smoke_test.dart test/pdf_engine_interface_test.dart test/page_selection_test.dart test/page_tools_dialog_test.dart test/document_workspace_test.dart test/image_info_test.dart test/image_placement_test.dart test/image_tools_dialog_test.dart test/page_fit_zoom_test.dart
       - name: Build release Web app
         run: flutter build web --release
       - name: Run native PDF Arabic annotation integration (Linux C toolchain)

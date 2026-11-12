@@ -1,7 +1,7 @@
 name: nahda_pdf_studio
 description: Offline-first Arabic PDF Studio for Flutter Web, Android and Windows.
 publish_to: none
-version: 0.4.0+4
+version: 0.4.1+5
 
 environment:
   sdk: '>=3.13.0 <4.0.0'
