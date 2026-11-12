@@ -47,7 +47,7 @@ if ($LASTEXITCODE -ne 0) { throw 'flutter analyze failed' }
 # Never use plain 'flutter test' as a default on Windows: pdfium_dart's
 # native asset hook requires an MSVC C/C++ toolchain for host-side tests.
 Write-Host 'Running Flutter browser smoke tests (Chrome)...' -ForegroundColor Cyan
-flutter test -d chrome test/workspace_smoke_test.dart test/pdf_engine_interface_test.dart
+flutter test -d chrome test/workspace_smoke_test.dart test/pdf_engine_interface_test.dart test/document_workspace_test.dart
 if ($LASTEXITCODE -ne 0) {
   throw 'Chrome tests failed. Check Chrome is installed. Native compiler is NOT needed for browser tests.'
 }
