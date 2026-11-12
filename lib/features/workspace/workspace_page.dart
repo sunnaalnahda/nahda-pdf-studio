@@ -327,7 +327,9 @@ class _WorkspacePageState extends State<WorkspacePage> {
     try {
       final selected = await _files.openImage();
       if (selected == null || !mounted ||
-          !identical(_session, session)) return;
+          !identical(_session, session)) {
+          return;
+        }
       final info = PdfImageInfo.inspect(selected.bytes);
       final request = await showInsertImageDialog(
         context,
@@ -338,7 +340,9 @@ class _WorkspacePageState extends State<WorkspacePage> {
         arabic: widget.arabic,
       );
       if (request == null || !mounted || _busy ||
-          !identical(_session, session)) return;
+          !identical(_session, session)) {
+          return;
+        }
 
       setState(() {
         _previewMode = false;
@@ -382,7 +386,9 @@ class _WorkspacePageState extends State<WorkspacePage> {
       currentOpacity: session.selectedImageOpacity,
     );
     if (request == null || !mounted || _busy ||
-        !identical(_session, session)) return;
+        !identical(_session, session)) {
+          return;
+        }
 
     if (request.action == ImageEditAction.delete) {
       final proceed = await showDialog<bool>(
@@ -406,7 +412,9 @@ class _WorkspacePageState extends State<WorkspacePage> {
         ),
       );
       if (proceed != true || !mounted ||
-          !identical(_session, session)) return;
+          !identical(_session, session)) {
+          return;
+        }
     }
 
     try {
@@ -455,7 +463,9 @@ class _WorkspacePageState extends State<WorkspacePage> {
     try {
       final selected = await _files.openImage();
       if (selected == null || !mounted ||
-          !identical(_session, session)) return;
+          !identical(_session, session)) {
+          return;
+        }
       PdfImageInfo.inspect(selected.bytes);
       setState(() => _busy = true);
       try {
