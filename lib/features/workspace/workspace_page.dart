@@ -281,13 +281,17 @@ class _WorkspacePageState extends State<WorkspacePage> {
     switch (action) {
       case _WorkspaceAction.saveAll:
         unawaited(_saveAllModified());
+        break;
       case _WorkspaceAction.close:
         final active = _documents.active;
         if (active != null) unawaited(_closeTab(active));
+        break;
       case _WorkspaceAction.details:
         unawaited(_showDetails());
+        break;
       case _WorkspaceAction.shortcuts:
         unawaited(_showShortcuts());
+        break;
     }
   }
 
