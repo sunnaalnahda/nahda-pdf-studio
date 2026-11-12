@@ -127,7 +127,7 @@ class _InsertImageDialogState extends State<_InsertImageDialog> {
                   maxLines: 1, overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleSmall),
               Text(
-                '0__REPLACE__',
+                '${widget.info.width} × ${widget.info.height} px • $lengthKb KB',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 14),
@@ -174,14 +174,14 @@ class _InsertImageDialogState extends State<_InsertImageDialog> {
               const SizedBox(height: 12),
               Row(children: [
                 Expanded(child: Text(t('الشفافية', 'Opacity'))),
-                Text('0__REPLACE_OPACITY__'),
+                Text('${(_opacity * 100).round()}%'),
               ]),
               Slider(
                 value: _opacity,
                 min: 0.1,
                 max: 1,
                 divisions: 18,
-                label: '0__REPLACE_SLIDER__',
+                label: '${(_opacity * 100).round()}%',
                 onChanged: (v) => setState(() => _opacity = v),
               ),
               Text(t(
@@ -272,7 +272,7 @@ class _EditImageDialogState extends State<_EditImageDialog> {
   final _top = TextEditingController(text: '10');
   final _bottom = TextEditingController(text: '10');
   String? _error;
-  late double _opacity = widget.currentOpacity.clamp(0.1, 1);
+  late double _opacity = widget.currentOpacity.clamp(0.1, 1).toDouble();
 
   String t(String ar, String en) => widget.arabic ? ar : en;
 
@@ -414,7 +414,7 @@ class _EditImageDialogState extends State<_EditImageDialog> {
                   divisions: 18,
                   onChanged: (v) => setState(() => _opacity = v),
                 )),
-                Text('0__REPLACE_OPACITY__'),
+                Text('${(_opacity * 100).round()}%'),
               ]),
               Align(
                 alignment: AlignmentDirectional.centerStart,
