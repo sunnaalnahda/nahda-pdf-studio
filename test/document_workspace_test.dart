@@ -113,6 +113,17 @@ void main() {
       expect(c.disposeCalls, 1);
     });
 
+    test('caller can defer PDF disposal until after the final UI frame', () {
+      final workspace = DocumentWorkspace<FakeSession>();
+      final session = FakeSession('pending-dispose.pdf');
+      final tab = workspace.add(session);
+      expect(workspace.close(tab, disposeSession: false), true);
+      expect(session.disposeCalls, 0);
+      expect(workspace.count, 0);
+      session.dispose();
+      expect(session.disposeCalls, 1);
+    });
+
     test('capacity and aggregate input size protect memory usage', () {
       final workspace = DocumentWorkspace<FakeSession>(
         maxTabs: 2, maxOriginalBytes: 5,

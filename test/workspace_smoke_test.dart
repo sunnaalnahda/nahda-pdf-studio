@@ -14,5 +14,10 @@ void main() {
     expect(find.text('Nahda PDF Studio'), findsOneWidget);
     expect(find.text('فتح PDF'), findsOneWidget);
     expect(find.text('اختيار ملف PDF'), findsOneWidget);
+    await tester.tap(find.byTooltip('المزيد من الأدوات'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('اختصارات لوحة المفاتيح'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Ctrl+O'), findsOneWidget);
   });
 }
