@@ -111,6 +111,71 @@ class DartPdfSession implements PdfEditingSession {
     }
   }
 
+  void _checkPage(int index) {
+    RangeError.checkValidIndex(index, null, 'page', pageCount);
+  }
+
+  @override
+  void rotatePage(int index, int degrees) {
+    _checkPage(index);
+    if (degrees != 90 && degrees != -90 && degrees != 180) {
+      throw ArgumentError.value(degrees, 'degrees');
+    }
+    if (!controller.rotatePages([index], degrees)) {
+      throw StateError('لم يتم تدوير الصفحة.');
+    }
+  }
+
+  @override
+  void duplicatePage(int index) {
+    _checkPage(index);
+    if (!controller.duplicatePages([index])) {
+      throw StateError('تعذر تكرار الصفحة.');
+    }
+  }
+
+  @override
+  void movePage(int from, int to) {
+    _checkPage(from);
+    _checkPage(to);
+    controller.movePage(from, to);
+  }
+
+  @override
+  void removePage(int index) {
+    _checkPage(index);
+    if (pageCount <= 1) {
+      throw StateError('لا يمكن حذف آخر صفحة من المستند.');
+    }
+    controller.removePage(index);
+  }
+
+  @override
+  void addBlankPageAfter(int index) {
+    _checkPage(index);
+    controller.addBlankPage(at: index + 1);
+  }
+
+  @override
+  void appendPdf(Uint8List bytes) {
+    if (bytes.length < 5 ||
+        !String.fromCharCodes(bytes.take(1024)).contains('%PDF-')) {
+      throw const FormatException('الملف الثاني ليس مستند PDF صالحًا.');
+    }
+    controller.insertPagesFromBytes(bytes);
+  }
+
+  @override
+  Uint8List extractPages(List<int> indices) {
+    if (indices.isEmpty) {
+      throw const FormatException('اختر صفحة واحدة على الأقل.');
+    }
+    for (final index in indices) {
+      _checkPage(index);
+    }
+    return controller.exportPages(indices);
+  }
+
   @override
   void undo() => controller.undo();
 

@@ -23,6 +23,14 @@ abstract interface class PdfEditingSession {
     required int pageIndex,
     double fontSize,
   });
+  /// Page operations use zero-based indices and preserve editable PDF data.
+  void rotatePage(int index, int degrees);
+  void duplicatePage(int index);
+  void movePage(int from, int to);
+  void removePage(int index);
+  void addBlankPageAfter(int index);
+  void appendPdf(Uint8List bytes);
+  Uint8List extractPages(List<int> indices);
   void undo();
   void redo();
   void dispose();
