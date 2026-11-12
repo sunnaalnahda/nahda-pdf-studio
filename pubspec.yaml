@@ -13,6 +13,7 @@ dependencies:
     sdk: flutter
   pdfrx: 2.12.0
   dart_pdf_editor: 15.0.0
+  pdf_document: 15.0.0
   dart_pdf_editor_assets: 15.0.0
   file_picker: 13.3.3
 

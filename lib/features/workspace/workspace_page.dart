@@ -101,7 +101,9 @@ class _WorkspacePageState extends State<WorkspacePage> {
     } catch (error) {
       _toast(t('فشل فتح الملف: $error', 'Unable to open PDF: $error'));
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+          setState(() => _busy = false);
+        }
     }
   }
 
@@ -130,7 +132,9 @@ class _WorkspacePageState extends State<WorkspacePage> {
       _toast(t('تعذر حفظ الملف: $error', 'Unable to save PDF: $error'));
       return false;
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+          setState(() => _busy = false);
+        }
     }
   }
 
@@ -351,7 +355,9 @@ class _WorkspacePageState extends State<WorkspacePage> {
           'Image embedded as a separate PDF object. You can move, crop and resize it.',
         ));
       } finally {
-        if (mounted) setState(() => _busy = false);
+        if (mounted) {
+          setState(() => _busy = false);
+        }
       }
     } catch (error) {
       _toast(t('تعذر إدراج الصورة: $error',
@@ -462,7 +468,9 @@ class _WorkspacePageState extends State<WorkspacePage> {
           'Selected original page image replaced while retaining neighboring content.',
         ));
       } finally {
-        if (mounted) setState(() => _busy = false);
+        if (mounted) {
+          setState(() => _busy = false);
+        }
       }
     } catch (error) {
       _toast(t('تعذر استبدال الصورة: $error',
@@ -642,7 +650,9 @@ class _WorkspacePageState extends State<WorkspacePage> {
     } catch (error) {
       _toast(t('تعذّر تنفيذ العملية: $error', 'Operation failed: $error'));
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+          setState(() => _busy = false);
+        }
     }
   }
 
